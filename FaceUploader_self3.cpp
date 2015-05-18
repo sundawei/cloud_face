@@ -106,8 +106,8 @@ struct msgtype {
     char buffer[BUFFER]; 
 };
 struct RealMsg{
-	long msglen;
-	char* buffer;
+    long msglen;
+    char* buffer;
 };
 
 struct msgtype SMSG;
@@ -136,15 +136,15 @@ char buffer[1024*1024*10];
 long nsize=0;
 
 struct MemoryStruct {
-	char *memory;
-	size_t size;
+    char *memory;
+    size_t size;
 };
 
 struct SendParam {
-	string a;
-	string b;
-	string c;
-	IplImage* img;
+    string a;
+    string b;
+    string c;
+    IplImage* img;
 };
 
 typedef struct _GUID
@@ -187,122 +187,122 @@ std::string GuidToString(const GUID &guid)
 
 void EncodeImg2Jpg(IplImage* img,char* buffer,int & len)
 {
-	vector<int> p;
-	p.push_back(CV_IMWRITE_JPEG_QUALITY);
-	p.push_back(100);
-	vector<unsigned char> buf;
-	cv::imencode(".jpg", (Mat)img, buf, p);
-	len = buf.size();
-	memcpy(buffer,buf.data(),buf.size());
-	std::vector<unsigned char>().swap(buf);
+    vector<int> p;
+    p.push_back(CV_IMWRITE_JPEG_QUALITY);
+    p.push_back(100);
+    vector<unsigned char> buf;
+    cv::imencode(".jpg", (Mat)img, buf, p);
+    len = buf.size();
+    memcpy(buffer,buf.data(),buf.size());
+    std::vector<unsigned char>().swap(buf);
 }
 
 int sneFace2Qpid(Message message)
 {
-	int ret = 0;
-	std::string connectionOptions =  "";
-	Connection connection(qurl, connectionOptions);
-	connection.setOption("reconnect", true);
-	try 
+    int ret = 0;
+    std::string connectionOptions =  "";
+    Connection connection(qurl, connectionOptions);
+    connection.setOption("reconnect", true);
+    try 
     {
-		connection.open();
-		Session session = connection.createSession();
-		Sender sender = session.createSender(qaddress);
-		sender.send(message, true);
-		connection.close();
-		LOG4CXX_TRACE(logger,"send a message"); 
-		ret = 1;
-	} 
+        connection.open();
+        Session session = connection.createSession();
+        Sender sender = session.createSender(qaddress);
+        sender.send(message, true);
+        connection.close();
+        LOG4CXX_TRACE(logger,"send a message"); 
+        ret = 1;
+    } 
     catch(const std::exception& error) 
     {
-		std::cout << error.what() << std::endl;
-		LOG4CXX_TRACE(logger,error.what()); 
-		connection.close();
-		ret = 0;
-	}
-	return ret;
+        std::cout << error.what() << std::endl;
+        LOG4CXX_TRACE(logger,error.what()); 
+        connection.close();
+        ret = 0;
+    }
+    return ret;
 }
 
 string GetDateString()
 {
-	time_t now;
-	struct tm *tm_now;
-	char sdatetime[20];
-	time(&now);
-	tm_now = localtime(&now);
-	strftime(sdatetime, 20, "./%Y-%m-%d", tm_now);
-	return std::string(sdatetime);
+    time_t now;
+    struct tm *tm_now;
+    char sdatetime[20];
+    time(&now);
+    tm_now = localtime(&now);
+    strftime(sdatetime, 20, "./%Y-%m-%d", tm_now);
+    return std::string(sdatetime);
 }
 
 void  *SendMessageFormFile(void *arg)
 {
-	pthread_mutex_lock(&file_mutex);
-	if(msgQ.size()>0)
-	{
-		for(int i=0;i<msgQ.size();i++)
-		{
-			sneFace2Qpid(msgQ.at(i));
-		}
-		vector<Message>().swap(msgQ);
-	}
-	pthread_mutex_unlock(&file_mutex);
-	return 0;
+    pthread_mutex_lock(&file_mutex);
+    if(msgQ.size()>0)
+    {
+        for(int i=0;i<msgQ.size();i++)
+        {
+            sneFace2Qpid(msgQ.at(i));
+        }
+        vector<Message>().swap(msgQ);
+    }
+    pthread_mutex_unlock(&file_mutex);
+    return 0;
 }
 
 void SaveMessage2Disk(char* buffer, int length)
 {
-	LOG4CXX_TRACE(logger,"encode and send msg ");
-	Variant::Map content;
-	content["place"] = place;
-	content["pos"] = pos;
-	content["camname"] = camname;
-	content["workmode"] = workmode;
-	content["m0"] = m0;
-	content["m1"] = m1;
-	content["m2"] = m2;
-	content["int"] = time(0);
-	string spic;
-	spic.assign(buffer,length);
-	content["picture"] = spic;
-	content["uuid"] = GuidToString(CreateGuid());	
-	Message message;
-	encode(content, message);
-	pthread_mutex_lock(&file_mutex);
-	if(msgQ.size() < 50)
-	   msgQ.push_back(message);
-	pthread_mutex_unlock(&file_mutex);
+    LOG4CXX_TRACE(logger,"encode and send msg ");
+    Variant::Map content;
+    content["place"] = place;
+    content["pos"] = pos;
+    content["camname"] = camname;
+    content["workmode"] = workmode;
+    content["m0"] = m0;
+    content["m1"] = m1;
+    content["m2"] = m2;
+    content["int"] = time(0);
+    string spic;
+    spic.assign(buffer,length);
+    content["picture"] = spic;
+    content["uuid"] = GuidToString(CreateGuid());   
+    Message message;
+    encode(content, message);
+    pthread_mutex_lock(&file_mutex);
+    if(msgQ.size() < 50)
+       msgQ.push_back(message);
+    pthread_mutex_unlock(&file_mutex);
 
 }
 
 int SendFace2Qpid(char* buffer,int length)
-{	
-	SaveMessage2Disk(buffer,length);
-	return 1;
+{   
+    SaveMessage2Disk(buffer,length);
+    return 1;
 }
 
 void  *SendInfo(void *arg)
 {
-	SendParam* ppm = (SendParam*)arg;
-	char* SendBuffer = new char[1024*1024*4];
-	int piclen = 0;
-	EncodeImg2Jpg(ppm->img,SendBuffer,piclen);
-	printf("[sam]piclen = %d\n",piclen);
-	int ret = SendFace2Qpid(SendBuffer,piclen);
-	while(ret == 0)
-	{
-		ret = SendFace2Qpid(SendBuffer,piclen);
-	}
-	delete [] SendBuffer;
-	cvReleaseImage(&ppm->img);
-	delete [] (char*)arg;
-	return 0;
+    SendParam* ppm = (SendParam*)arg;
+    char* SendBuffer = new char[1024*1024*4];
+    int piclen = 0;
+    EncodeImg2Jpg(ppm->img,SendBuffer,piclen);
+    printf("[sam]piclen = %d\n",piclen);
+    int ret = SendFace2Qpid(SendBuffer,piclen);
+    while(ret == 0)
+    {
+        ret = SendFace2Qpid(SendBuffer,piclen);
+    }
+    delete [] SendBuffer;
+    cvReleaseImage(&ppm->img);
+    delete [] (char*)arg;
+    return 0;
 
 }
 
 void cropImage(IplImage* src,IplImage* & dstimg,CvRect r)
 {
-	dstimg = cvCreateImage(cvSize(r.width,r.height),src->depth,src->nChannels);
-	(((Mat)(src))(r)).convertTo( ((Mat)(dstimg)), ((Mat&)(dstimg)).type(),1,0);
+    dstimg = cvCreateImage(cvSize(r.width,r.height),src->depth,src->nChannels);
+    (((Mat)(src))(r)).convertTo( ((Mat)(dstimg)), ((Mat&)(dstimg)).type(),1,0);
 }
 ef_shlib_hnd dll_handle;                                                  
 fcn_efReadImageUc                fcnEfReadImageUc;
@@ -446,7 +446,7 @@ int loadDll(const char * dll_filename)
 
 void freeDll()
 {
-	EF_FREE_LIB(dll_handle);
+    EF_FREE_LIB(dll_handle);
 }
 
 static double myGetTime()
@@ -578,8 +578,8 @@ void Enroll(int argc, _TCHAR* argv[],IplImage* &img0,char* jpgdata,int jpglen)
         printf("Running efGetVisualOutput() failed.\n");
         return;
     }   
-	int face_count = 0;
-	GetFaces(img0,visual_output, fps,face_count);
+    int face_count = 0;
+    GetFaces(img0,visual_output, fps,face_count);
     printf("detect %d faces\n", face_count);
     for(int i=0;i<face_count;i++)
     {
@@ -597,52 +597,52 @@ void Enroll(int argc, _TCHAR* argv[],IplImage* &img0,char* jpgdata,int jpglen)
 static size_t
 WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
-	size_t realsize = size * nmemb;
-	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-	mem->memory = (char*)realloc(mem->memory, mem->size + realsize + 1);
-	if(mem->memory == NULL) {
-		LOG4CXX_TRACE(logger,"not enough memory (realloc returned NULL)");
-		return 0;
-	}
-	memcpy(&(mem->memory[mem->size]), contents, realsize);
-	mem->size += realsize;
-	mem->memory[mem->size] = 0;
-	return realsize;
+    size_t realsize = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+    mem->memory = (char*)realloc(mem->memory, mem->size + realsize + 1);
+    if(mem->memory == NULL) {
+        LOG4CXX_TRACE(logger,"not enough memory (realloc returned NULL)");
+        return 0;
+    }
+    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = 0;
+    return realsize;
 }
 
 void getPic(char* pic,long & picsize)
 {
-	CURL *curl_handle;
-	CURLcode res;
-	struct MemoryStruct chunk;
-	chunk.memory = (char*)malloc(1); 
-	chunk.size = 0;    
-	curl_global_init(CURL_GLOBAL_ALL);
-	curl_handle = curl_easy_init();
-	curl_easy_setopt(curl_handle, CURLOPT_URL, mjpeg);
-	curl_easy_setopt(curl_handle, CURLOPT_FORBID_REUSE, 1);
-	curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
-	curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 30L);
-	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
-	curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-	res = curl_easy_perform(curl_handle);
-	if(res != CURLE_OK) 
+    CURL *curl_handle;
+    CURLcode res;
+    struct MemoryStruct chunk;
+    chunk.memory = (char*)malloc(1); 
+    chunk.size = 0;    
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl_handle = curl_easy_init();
+    curl_easy_setopt(curl_handle, CURLOPT_URL, mjpeg);
+    curl_easy_setopt(curl_handle, CURLOPT_FORBID_REUSE, 1);
+    curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
+    curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+    res = curl_easy_perform(curl_handle);
+    if(res != CURLE_OK) 
     {
-		LOG4CXX_TRACE(logger,"curl_easy_perform() failed: "<<curl_easy_strerror(res));
-		picsize = 0;
-	}
-	else 
+        LOG4CXX_TRACE(logger,"curl_easy_perform() failed: "<<curl_easy_strerror(res));
+        picsize = 0;
+    }
+    else 
     {
-		memcpy(pic,chunk.memory,chunk.size);
-		picsize = chunk.size;
-	}
-	curl_easy_cleanup(curl_handle);
-	if(chunk.memory)
-		free(chunk.memory);
-	chunk.memory=0;
-	curl_global_cleanup();
-	return ;
+        memcpy(pic,chunk.memory,chunk.size);
+        picsize = chunk.size;
+    }
+    curl_easy_cleanup(curl_handle);
+    if(chunk.memory)
+        free(chunk.memory);
+    chunk.memory=0;
+    curl_global_cleanup();
+    return ;
 }
 
 
@@ -651,22 +651,22 @@ void  *GetUrlPic(void *arg)
     getPic(buffer,nsize);
     if(nsize > 0)
     {
-    	std::vector<char> data1(buffer, buffer + nsize);
-    	cv::Mat imgMat = cv::imdecode(Mat(data1), CV_LOAD_IMAGE_COLOR);
-    	IplImage img = imgMat;
+        std::vector<char> data1(buffer, buffer + nsize);
+        cv::Mat imgMat = cv::imdecode(Mat(data1), CV_LOAD_IMAGE_COLOR);
+        IplImage img = imgMat;
         printf("before enroll\n");
         IplImage* qq = &img;
-    	Enroll(0,0,qq,buffer,nsize);
+        Enroll(0,0,qq,buffer,nsize);
         printf("end enroll\n");
-    	data1.clear();
-    	std::vector<char>().swap(data1);
+        data1.clear();
+        std::vector<char>().swap(data1);
     }
     printf("workmode %d\n",atoi(workmode));
     int sleepm = atoi(workmode);
     if(sleepm<0)
-    	sleepm = 50;
+        sleepm = 50;
     usleep(1000*sleepm);
-	return 0;
+    return 0;
 }
 
 
@@ -729,24 +729,24 @@ int main( int argc, char** argv )
     }
     printf("done.\n");
     printf("1\n");
-	PropertyConfigurator::configure("./ta_faceuploader_logconfig.cfg"); 
-	logger = Logger::getLogger("Trace_FaceUpLoader"); 
+    PropertyConfigurator::configure("./ta_faceuploader_logconfig.cfg"); 
+    logger = Logger::getLogger("Trace_FaceUpLoader"); 
     printf("2\n");
     pthread_mutex_init(&file_mutex,NULL); 
-	strcpy(place,"japan");
-	strcpy(pos,"Yodobashi Sapporo");
-	strcpy(camname,"AXIS P3367-V");
-	strcpy(mjpeg,"http://root:agent@192.168.0.101/jpg/image.jpg");
-	strcpy(qurl,"amqp:tcp:219.101.248.183:9999");
-	strcpy(qaddress,"message_queue; {create: always}");
-	strcpy(workmode,"500");
-	pthread_t  tid,tidsnd;
-	int  ret;
-	while(1)
-	{
+    strcpy(place,"japan");
+    strcpy(pos,"Yodobashi Sapporo");
+    strcpy(camname,"AXIS P3367-V");
+    strcpy(mjpeg,"http://root:agent@192.168.0.101/jpg/image.jpg");
+    strcpy(qurl,"amqp:tcp:219.101.248.183:9999");
+    strcpy(qaddress,"message_queue; {create: always}");
+    strcpy(workmode,"500");
+    pthread_t  tid,tidsnd;
+    int  ret;
+    while(1)
+    {
         GetUrlPic(0);
         SendMessageFormFile(0);
-	}
-	pthread_mutex_destroy(&file_mutex);
-	return 0;
+    }
+    pthread_mutex_destroy(&file_mutex);
+    return 0;
 }
