@@ -1044,7 +1044,7 @@ int main2(int argc, char** argv) {
 	}
 	return 1;   
 }
-
+//save on gith
 int main(int argc, char** argv)
 {
 	PropertyConfigurator::configure("ta_rv2db_logconfig.cfg"); 
