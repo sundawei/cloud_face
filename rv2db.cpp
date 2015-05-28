@@ -9,6 +9,10 @@
 #include <qpid/messaging/Receiver.h>
 #include <qpid/messaging/Session.h>
 #include <qpid/types/Variant.h>
+#include <opencv/cv.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
 #include <cstdlib>
 #include <sstream>
 #include <my_global.h>
@@ -27,6 +31,9 @@
 #include <log4cxx/propertyconfigurator.h> 
 #include "EyeFace.h"
 #include "EyeFaceAdvanced.h"
+
+
+
 using namespace std;
 using namespace qpid::messaging;
 using namespace qpid::types;
@@ -34,6 +41,8 @@ using std::stringstream;
 using std::string;
 using namespace log4cxx; 
 using namespace boost::property_tree;
+using namespace cv;
+
 
 #define _TCHAR char
 #define _tprintf printf
@@ -45,9 +54,9 @@ using namespace boost::property_tree;
 #define _MAX_PATH       1024
 #endif
 // min function
-#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
+//#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 // path to a directory containing config.ini file and models
-#define EYEFACE_DIR   	(char*)"/opt/Release-EyeFaceSDK-v3.11.0-CentOS-6.4-x86_64-hasp/eyefacesdk"
+#define EYEFACE_DIR   	(char*)"/opt/Release-EyeFaceSDK-v3.12.0-CentOS-6.6-x86_64-hasp/eyefacesdk"
 #define CONFIG_INI 	    (char*)"config.ini"
 // List of testing images
 #define VERTICAL_FLIP 0
@@ -56,6 +65,7 @@ using namespace boost::property_tree;
 #define _MAX_PATH 1024
 #endif
 
+typedef longlong int64;
 
 const char *ageStrings[] = {"0-10", "5-15", "10-20", "15_25", "20-30", "25_35", "30-40", "35-45", "40-50", "45+"};
 const char *MaleFemale[] = {"male", "female"};
@@ -312,7 +322,26 @@ void FinalizeEngine(void* engine)
 {
 	freeDll();
 }
+void GetRawImage(unsigned char*& raw_img,string jpgdata)
+{
+	std::vector<char> data1((char*)jpgdata.data(), (char*)jpgdata.data() + jpgdata.size());
+    cv::Mat imgMat = cv::imdecode(Mat(data1), CV_LOAD_IMAGE_COLOR);
+    IplImage img=imgMat;
+    IplImage *grey_image = cvCreateImage(cvSize(img.width, img.height), 8, 1);
+    // convert opencv image to gray image and to raw_img
+    cvCvtColor(&img, grey_image, CV_BGR2GRAY);
+ 	raw_img = new unsigned char[img.width*img.height];
+        // copy opencv image to raw image
+    int cnt=0;
+    for (int i=0; i < grey_image->height; i++)
+        for (int j=0; j < grey_image->width; j++)
+            raw_img[cnt++] = ((unsigned char*)(grey_image->imageData + i*grey_image->widthStep))[j];
 
+    cvReleaseImage(&grey_image);
+    data1.clear();
+    std::vector<char>().swap(data1);
+
+}
 string GetDateString()//get date dir
 {
 	time_t now;
@@ -373,6 +402,8 @@ int ReadBinaryFile(_TCHAR* name, void** data, unsigned int* size)
 	fclose(fp);
 	return 0;
 }
+
+
 void getbdirs(long tttm,int days,vector<string>& salldirs)//find available date dirs 
 {
     for(int i=0;i<days;i++)
@@ -491,14 +522,14 @@ int GetFileFacID(EfDetResult * &det_result_1,char* filename)
 	void * state = NULL;  
 	EfMatrixUc * input_image_1 = NULL;
 
-	printf("05\n");
+	//printf("05\n");
 		 if (!(state = fcnEfInitEyeFace(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI)))
 	 {
 	     fprintf(stderr,"ERROR 103: efInitEyeFace() failed.\n");
 	     return 103;
 	 }
-	 printf("06\n");
-	 printf("filename %s\n",filename);
+	 //printf("06\n");
+	// printf("filename %s\n",filename);
 
 	if (!(input_image_1 = fcnEfReadImageUc(filename)))
     {
@@ -571,32 +602,36 @@ int GetFaceID(EfDetResult * &det_result_1,string facedata)
 	EfMatrixUc * input_image_1 = NULL;
 	FILE* ffh = fopen("./temp1.jpg","wb");
 	fwrite((char*)facedata.data(),facedata.size(),1,ffh);
+	fflush(ffh);
 	fclose(ffh);
-	printf("01\n");
+
+	//GetRawImage((unsigned char*&)input_image_1,facedata);
+	//printf("01\n");
 	 if (!(state = fcnEfInitEyeFace(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI)))
 	 {
 	     fprintf(stderr,"ERROR 103: efInitEyeFace() failed.\n");
 	     return 103;
 	 }
-	printf("01.5\n");
+	//printf("01.5\n");
 	if (!(input_image_1 = fcnEfReadImageUc("./temp1.jpg")))
     {
         LOG4CXX_TRACE(logger,"ERROR 105: Can't load the image file");
         return 105;
     }
-	printf("02\n");
+	//printf("02\n");
     if (!(det_result_1 = fcnEfRunFaceDetector(input_image_1, state)))
     {
         LOG4CXX_TRACE(logger,"ERROR 106: efRunFaceDetector() failed.");
         return 106;
     }
-	printf("03\n");
+	//printf("03\n");
     if(det_result_1->num_detections<1)
     {
     	fcnEfFreeImageUc(input_image_1);
 	    fcnEfShutdownEyeFace(state);
 	    fcnEfClearEyeFaceState(state);
 	    fcnEfFreeEyeFaceState(state);
+	    LOG4CXX_TRACE(logger,"sdk found 0 face");
     	return 170;//no face
     }
     for (int i = 0;  i < det_result_1->num_detections; i++)
@@ -723,6 +758,8 @@ int SendFace2DB(int len0,char* facedata,int len1,char* afid,const char* place,co
 	{
 		return finish_with_error(con);
 	}   
+
+
 	char *chunk = new char[2*size+1];
 	char *chunk2 = new char[2*size2+1];
 	mysql_real_escape_string(con, chunk, facedata, size);
@@ -746,6 +783,7 @@ int SendFace2DB(int len0,char* facedata,int len1,char* afid,const char* place,co
 	else
 		len = snprintf(query, st_len + 2*size+1+100+40+80+2*size2+1, st1, chunk,chunk2,atoi(stime),size2,place,pos,workmode,camname,suuid,sgender,sage);
 
+	LOG4CXX_TRACE(logger,"insert into db gender="<<sgender<<" age="<<sage<<" db="<<whichdb);
 	if (mysql_real_query(con, query, len))
 	{
 		delete [] chunk;
@@ -854,6 +892,114 @@ void UpdateAfid(vector<string>& allfaces,string suuid,int newfacetime,string pkg
 	UpdateDBAfid(suuid,safiddata,newfacetime);
 }
 
+
+int getga2(IplImage img,int& g,int& a)
+{
+	ef_shlib_hnd dll_handle2;                                                  // global pointer to EyeFace-SDK shared library
+
+	EF_OPEN_SHLIB(dll_handle2,lib_name);
+
+    // load shared library - explicit linking
+    //EF_OPEN_SHLIB(lib_handle, lib_path);
+
+	// library linking failed? (file not found, license invalid, or linker dependency missing)
+	//if (!lib_handle)
+		//return -1;
+	fcn_efInitEyeFace                       fcnEfInitEyeFace1;
+	fcn_efFreeEyeFaceState                  fcnEfFreeEyeFaceState1;
+	fcn_efMain                              fcnEfMain1;
+	fcn_efGetVisualOutput                   fcnEfGetVisualOutput1;
+	fcn_efFreeVisualOutput                  fcnEfFreeVisualOutput1;
+
+    // get pointers to functions from loaded library
+    //EF_LOAD_SHFCN(fcnEfReadImageUc, fcn_efReadImageUc, lib_handle, "efReadImageUc");
+    //EF_LOAD_SHFCN(fcnEfFreeImageUc, fcn_efFreeImageUc, lib_handle,  "efFreeImageUc");
+    EF_LOAD_SHFCN(fcnEfInitEyeFace1, fcn_efInitEyeFace, dll_handle2, "efInitEyeFace");
+    EF_LOAD_SHFCN(fcnEfFreeEyeFaceState1, fcn_efFreeEyeFaceState, dll_handle2, "efFreeEyeFaceState");
+    EF_LOAD_SHFCN(fcnEfMain1, fcn_efMain, dll_handle2, "efMain");
+    EF_LOAD_SHFCN(fcnEfGetVisualOutput1, fcn_efGetVisualOutput, dll_handle2, "efGetVisualOutput");
+    EF_LOAD_SHFCN(fcnEfFreeVisualOutput1, fcn_efFreeVisualOutput, dll_handle2, "efFreeVisualOutput");
+    //EF_LOAD_SHFCN(fcnEfGetLibraryVersion, fcn_efGetLibraryVersion, lib_handle, "efGetLibraryVersion");
+
+    // write out library version
+//    printf("EyeFace SDK library version: %d\n\n", fcnEfGetLibraryVersion());
+
+    // load image
+   // EfMatrixUc * input_image = fcnEfReadImageUc("./temp.jpg");
+
+
+    IplImage *grey_image = cvCreateImage(cvSize(img.width, img.height), 8, 1);
+                
+        // convert opencv image to gray image and to raw_img
+    cvCvtColor(&img, grey_image, CV_BGR2GRAY);
+
+ 	unsigned char * raw_img = new unsigned char[img.width*img.height];
+        // copy opencv image to raw image
+    int cnt=0;
+    for (int i=0; i < grey_image->height; i++)
+        for (int j=0; j < grey_image->width; j++)
+            raw_img[cnt++] = ((unsigned char*)(grey_image->imageData + i*grey_image->widthStep))[j];
+
+    // init EyeFace state
+    void * state;
+    state = fcnEfInitEyeFace1(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI);
+
+	// EyeFace SDK init failed? (license invalid) 
+	if (!state)
+	{
+		cvReleaseImage(&grey_image);
+    	delete [] raw_img;
+    	printf("getga2 failed 1\n");
+    	EF_FREE_LIB(dll_handle2);
+    	LOG4CXX_TRACE(logger,"getga2 failed");
+		return -1;
+	}
+
+    // setup detection area
+    EfBoundingBox bounding_box;
+    bounding_box.top_left_col = 0;
+    bounding_box.top_left_row = 0;
+    bounding_box.bot_right_col = grey_image->width - 1;
+    bounding_box.bot_right_row = grey_image->height - 1;
+
+	// run face detection and recognition
+    fcnEfMain1(raw_img,grey_image->width,grey_image->height, 0, &bounding_box, state, 0);
+
+    cvReleaseImage(&grey_image);
+    delete [] raw_img;
+
+	// recover tracks from the state
+    EfVisualOutput * visual_output = fcnEfGetVisualOutput1(state, 0, 0);
+
+//    printf("Number of detected faces: %d\n", visual_output->num_vis);
+
+    for (int i = 0; i < visual_output->num_vis; i++)
+    {
+            EfGender gender = visual_output->vis_data[i].gender;            
+            printf("%s\n",
+                   ( gender == EF_GENDER_NONE ? "-1" :
+                   ( gender == EF_GENDER_MALE ? "0" : "1"  ) ) );
+            g=gender;
+            
+            if (visual_output->vis_data[i].age >= 0)
+                printf("%d\n", visual_output->vis_data[i].age);
+            else
+                printf("%s\n", "-1");
+            a=visual_output->vis_data[i].age;
+
+            printf("********************\n");
+            printf("age = %d gender = %d\n",a,g);
+            printf("********************\n");
+    }
+
+    // Tidy-up
+    fcnEfFreeVisualOutput1(visual_output);
+//    fcnEfFreeImageUc(input_image);
+    fcnEfFreeEyeFaceState1(state);
+    EF_FREE_LIB(dll_handle2);
+
+    return 0;
+}
 void getga(int& g,int& a)
 {
 	FILE *fp = popen("./getGenderAge2","r");
@@ -936,7 +1082,36 @@ void getdbgenderage(string suuid)//search db 2 find first rec gender and age
 	mysql_free_result(result);
 	mysql_close(con);
 }
+#define DEALSAMECOUNT 10
+EfDetResult* L_10_result[DEALSAMECOUNT]={NULL};
+int Save_10_index = -1;
+int DetectSameFace(string sfacenow)
+{
+	int ret = -1;
+	EfDetResult * det_result_1=NULL;
+	if(1!=GetFaceID(det_result_1,sfacenow))
+	{
+		return 1;
+	}
+	
 
+	for(int i=0;i<DEALSAMECOUNT;i++)
+	{
+		if(L_10_result[i]!=NULL)
+		{
+			if(CompareFace(det_result_1,L_10_result[i])>0.3f)
+				{
+					ret=1;
+					break;
+				}
+		}
+	}
+
+	if(NULL!=det_result_1)
+		fcnEfFreeDetResult(det_result_1);
+
+	return ret;
+}
 int main2(int argc, char** argv) {
 	const char* url = argc>1 ? argv[1] : qpid_server;
 	const char* address = argc>2 ? argv[2] : qpid_address;
@@ -969,24 +1144,53 @@ int main2(int argc, char** argv) {
 		LOG4CXX_TRACE(logger," " <<tm_now<<" "<<atoi(ssti.c_str())<<" "<<sdatetime);
 		while(1) 
 		{
-			printf("got here\n");
+			//printf("got here\n");
 			EfDetResult * det_result_1;
 			if(1!=GetFaceID(det_result_1,s))
 			{
 				break;
 			}
-			fcnEfFreeDetResult(det_result_1);
+			//fcnEfFreeDetResult(det_result_1);
+			if(DetectSameFace(s)<0)
+			{
+				Save_10_index++;
+
+				if(Save_10_index>=DEALSAMECOUNT)
+				{
+					Save_10_index = 0;
+				}
+
+				if(L_10_result[Save_10_index]!=NULL)
+				{
+					fcnEfFreeDetResult(L_10_result[Save_10_index]);
+				}
+
+				L_10_result[Save_10_index]=det_result_1;
+
+			}
+			else
+			{
+				LOG4CXX_TRACE(logger,"Found a similar face or not found a face! Do not save it.");
+				break;
+			}
+			
 			void* afid = 0;
 			unsigned int size = 0;
 			LOG4CXX_TRACE(logger,"ok");
-			string sfuuid = FindMatchFace2(s,pkg_dir);
+			string sfuuid = "";//FindMatchFace2(s,pkg_dir);
 			string sgender = "NG";
 			string sage = "NG";
 			int igender = -1,iage = -1;
-			FILE* ffh=fopen("./temp.jpg","wb");
-			fwrite((char*)s.data(),s.size(),1,ffh);
-			fclose(ffh);
-			getga(igender,iage);
+			//FILE* ffh=fopen("./temp.jpg","wb");
+			//fwrite((char*)s.data(),s.size(),1,ffh);
+			//fflush(ffh);
+			//fclose(ffh);
+			std::vector<char> data1((char*)s.data(), (char*)s.data() + s.size());
+    		cv::Mat imgMat = cv::imdecode(Mat(data1), CV_LOAD_IMAGE_COLOR);
+    		IplImage iimg=imgMat;
+			getga2(iimg,igender,iage);
+			data1.clear();
+    		std::vector<char>().swap(data1);
 			if(igender != -1)
 			{
 				sgender = MaleFemale[igender];
@@ -999,6 +1203,7 @@ int main2(int argc, char** argv) {
 			}
 			if(sfuuid=="")//a new face
 			{
+				LOG4CXX_TRACE(logger,"add a new face"<<sgender<<" "<<sage);
 				SendFace2DB(s.size(),(char*)s.data(),size,(char*)afid,splace.c_str(),spos.c_str(),atoi(sworkmode.c_str()),scamname.c_str(),suuid.c_str(),ssti.c_str(),sgender.c_str(),sage.c_str(),1);//save 2 faceall
 				SendFace2DB(s.size(),(char*)s.data(),size,(char*)afid,splace.c_str(),spos.c_str(),atoi(sworkmode.c_str()),scamname.c_str(),suuid.c_str(),ssti.c_str(),sgender.c_str(),sage.c_str(),0);//save 2 face						
 				char fn[100]={0};
@@ -1044,7 +1249,7 @@ int main2(int argc, char** argv) {
 	}
 	return 1;   
 }
-//save on gith
+
 int main(int argc, char** argv)
 {
 	PropertyConfigurator::configure("ta_rv2db_logconfig.cfg"); 
