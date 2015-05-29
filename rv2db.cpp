@@ -979,7 +979,12 @@ int getga2(IplImage img,int& g,int& a)
             printf("%s\n",
                    ( gender == EF_GENDER_NONE ? "-1" :
                    ( gender == EF_GENDER_MALE ? "0" : "1"  ) ) );
-            g=gender;
+            if(gender==EF_GENDER_NONE)
+            	g=-1;
+            else if(gender == EF_GENDER_MALE)
+            	g=0;
+            else
+            	g=1;
             
             if (visual_output->vis_data[i].age >= 0)
                 printf("%d\n", visual_output->vis_data[i].age);
@@ -1099,7 +1104,7 @@ int DetectSameFace(string sfacenow)
 	{
 		if(L_10_result[i]!=NULL)
 		{
-			if(CompareFace(det_result_1,L_10_result[i])>0.3f)
+			if(CompareFace(det_result_1,L_10_result[i])>=0.2f)
 				{
 					ret=1;
 					break;
