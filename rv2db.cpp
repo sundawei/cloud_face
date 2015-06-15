@@ -1093,10 +1093,12 @@ int Save_10_index = -1;
 int DetectSameFace(string sfacenow)
 {
 	int ret = -1;
+	//return ret;
 	EfDetResult * det_result_1=NULL;
 	if(1!=GetFaceID(det_result_1,sfacenow))
 	{
-		return 1;
+
+		return -1;
 	}
 	
 
@@ -1104,7 +1106,7 @@ int DetectSameFace(string sfacenow)
 	{
 		if(L_10_result[i]!=NULL)
 		{
-			if(CompareFace(det_result_1,L_10_result[i])>=0.2f)
+			if(CompareFace(det_result_1,L_10_result[i])>=0.0f)
 				{
 					ret=1;
 					break;
@@ -1150,10 +1152,12 @@ int main2(int argc, char** argv) {
 		while(1) 
 		{
 			//printf("got here\n");
-			EfDetResult * det_result_1;
+			//*
+ 			EfDetResult * det_result_1;
 			if(1!=GetFaceID(det_result_1,s))
 			{
-				break;
+				//break;
+				det_result_1 = NULL;
 			}
 			//fcnEfFreeDetResult(det_result_1);
 			if(DetectSameFace(s)<0)
@@ -1167,6 +1171,7 @@ int main2(int argc, char** argv) {
 
 				if(L_10_result[Save_10_index]!=NULL)
 				{
+					if(NULL!=L_10_result[Save_10_index])
 					fcnEfFreeDetResult(L_10_result[Save_10_index]);
 				}
 
@@ -1178,7 +1183,7 @@ int main2(int argc, char** argv) {
 				LOG4CXX_TRACE(logger,"Found a similar face or not found a face! Do not save it.");
 				break;
 			}
-			
+			//*/
 			void* afid = 0;
 			unsigned int size = 0;
 			LOG4CXX_TRACE(logger,"ok");
@@ -1196,9 +1201,16 @@ int main2(int argc, char** argv) {
 			getga2(iimg,igender,iage);
 			data1.clear();
     		std::vector<char>().swap(data1);
+
+    		if(igender == -1 && iage == -1)
+    			break;
 			if(igender != -1)
 			{
 				sgender = MaleFemale[igender];
+			}
+			else
+			{
+				sgender = "male";
 			}
 			if(iage != -1)
 			{
