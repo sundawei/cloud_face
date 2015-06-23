@@ -87,7 +87,28 @@ char sprvgender[20]={0};
 char sprvage[20]={0};
 LoggerPtr logger=0;
 void *engine =0;
-char lib_name[] = "../../eyefacesdk/lib/libeyefacesdk-x86_64.so";
+char lib_name[] = "/opt/Release-EyeFaceSDK-v3.12.0-CentOS-6.6-x86_64-hasp/eyefacesdk/lib/libeyefacesdk-x86_64.so";
+
+/*
+class Ddata
+{
+public:
+	double *m_iddata;
+	unsigned int m_idlen;
+	int m_gender;
+	int m_age;
+public:
+	Ddata(double* iddata,unsigned int idlen,int gender,int age)
+	{
+		m_iddata = new double[]
+	}
+};
+//*/
+
+
+
+
+
 //read settings
 struct R_Setting
 {
@@ -157,6 +178,7 @@ fcn_efSetEyeFaceFlagParams           fcnEfSetEyeFaceFlagParams;
 fcn_efGetEyeFaceFlagParams           fcnEfGetEyeFaceFlagParams;
 fcn_efGetLicenseExpirationDate       fcnEfGetLicenseExpirationDate;
 fcn_efIDCompareFeatureVectors        fcnEfIDCompareFeatureVectors;
+fcn_efMain                           fcnEfMain;
     
 // Explicit linking - needed for Sentinel LDK (aka HASP) software protection cyphered shared libraries
 int loadDll(const char * dll_filename)
@@ -168,6 +190,11 @@ int loadDll(const char * dll_filename)
     	LOG4CXX_TRACE(logger,"Load dll failed ");
         return 1;
     }
+
+
+    EF_LOAD_SHFCN(fcnEfMain, fcn_efMain, dll_handle, "efMain");
+ 	if (!fcnEfMain)
+        return 29;
 
     // link efReadImageUC() 
     EF_LOAD_SHFCN(fcnEfReadImageUc, fcn_efReadImageUc, dll_handle, "efReadImageUc");
@@ -475,6 +502,11 @@ void getdirfiles(const char* sdir,unsigned int & count,vector<string>& fname)//g
 
 				if(strcmp(dirp->d_name,".") == 0 || strcmp(dirp->d_name,"..") == 0)   
 					continue;
+
+				string snm=string(dirp->d_name);
+				if(snm.substr(strlen(dirp->d_name)-3,3)!=string(".id"))
+					continue;
+
 				string sall = vdirs.at(i)+string("/") + string(dirp->d_name);
 				fname.push_back(sall);
 				LOG4CXX_TRACE(logger,"push file " << sall);
@@ -523,79 +555,108 @@ int GetFileFacID(EfDetResult * &det_result_1,char* filename)
 	EfMatrixUc * input_image_1 = NULL;
 
 	//printf("05\n");
-		 if (!(state = fcnEfInitEyeFace(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI)))
-	 {
+	if (!(state = fcnEfInitEyeFace(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI)))
+	{
 	     fprintf(stderr,"ERROR 103: efInitEyeFace() failed.\n");
 	     return 103;
-	 }
+	}
 	 //printf("06\n");
 	// printf("filename %s\n",filename);
 
 	if (!(input_image_1 = fcnEfReadImageUc(filename)))
-    {
-        LOG4CXX_TRACE(logger,"ERROR 105: Can't load the image file");
-        return 105;
-    }
+    	{	
+        	LOG4CXX_TRACE(logger,"ERROR 105: Can't load the image file");
+        	return 105;
+    	}
 
-    if (!(det_result_1 = fcnEfRunFaceDetector(input_image_1, state)))
-    {
-        LOG4CXX_TRACE(logger,"ERROR 106: efRunFaceDetector() failed.");
-        return 106;
-    }
-    if(det_result_1->num_detections<1)
-    {
-    	fcnEfFreeImageUc(input_image_1);
-	    fcnEfShutdownEyeFace(state);
-	    fcnEfClearEyeFaceState(state);
-	    fcnEfFreeEyeFaceState(state);
-    	return 170;//no face
-    }
+    	if (!(det_result_1 = fcnEfRunFaceDetector(input_image_1, state)))
+    	{	
+        	LOG4CXX_TRACE(logger,"ERROR 106: efRunFaceDetector() failed.");
+       	 	return 106;
+    	}
+    	if(det_result_1->num_detections<1)
+    	{
+    		fcnEfFreeImageUc(input_image_1);
+	    	fcnEfShutdownEyeFace(state);
+	    	fcnEfClearEyeFaceState(state);
+	   		fcnEfFreeEyeFaceState(state);
+    		return 170;//no face
+    	}
  	printf("07\n");
-    for (int i = 0;  i < det_result_1->num_detections; i++)
-    {
-        EfLandmarkResult * landmark_result = NULL;
-        if (!(landmark_result = fcnEfRunFaceLandmark(input_image_1, &(det_result_1->detection[i]), state)))
-        {
-            LOG4CXX_TRACE(logger,"ERROR 107: efRunFaceLandmark() failed.");
-            return 107;
-        }
+ 	//*
+    	for (int i = 0;  i < det_result_1->num_detections; i++)
+    	{
+        	EfLandmarkResult * landmark_result = NULL;
+        	if (!(landmark_result = fcnEfRunFaceLandmark(input_image_1, &(det_result_1->detection[i]), state)))
+        	{
+            		LOG4CXX_TRACE(logger,"ERROR 107: efRunFaceLandmark() failed.");
+            		return 107;
+        	}	
 
 		printf("08\n");
-        if (landmark_result->error == 1)
-        	LOG4CXX_TRACE(logger,"Warning: Can't estimate face landmarks, augmented face BB goes out of the image.");
-        if (fcnEfRunFaceImageExtraction(input_image_1, &(det_result_1->detection[i]), state,landmark_result))
-        {
-            LOG4CXX_TRACE(logger,"ERROR 108: Face extraction failed.");
-            return 108;
-        }
-        fcnEfFreeLandmarkResult(landmark_result);
-    }
-    printf("09\n");
-    for (int i = 0; i < det_result_1->num_detections; i++)
-    {
+        	if (landmark_result->error == 1)
+        		LOG4CXX_TRACE(logger,"Warning: Can't estimate face landmarks, augmented face BB goes out of the image.");
+        	if (fcnEfRunFaceImageExtraction(input_image_1, &(det_result_1->detection[i]), state,landmark_result))
+        	{
+            		LOG4CXX_TRACE(logger,"ERROR 108: Face extraction failed.");
+           	 	return 108;
+        	}
+       	 	fcnEfFreeLandmarkResult(landmark_result);
+    	}
+    	printf("09\n");
+    	for (int i = 0; i < det_result_1->num_detections; i++)
+    	{
 		int frontal_face = 0;
 		if(det_result_1->detection[i].angles[2] > 0)
 			frontal_face = det_result_1->detection[i].angles[2];
 		else
 			frontal_face = 0 - det_result_1->detection[i].angles[2];
-        frontal_face = frontal_face < 30; // only compute face attributes for frontal faces!!!
-        if (frontal_face)
-        {
-            if (fcnEfRunFaceIDFeatureExtraction(&(det_result_1->detection[i]), state) == -1)
-            {
-                  fprintf(stderr,"ERROR 112: Face ID features computation failed.\n");
-                  return 112;
-            }
-        }
-    }
+        	frontal_face = frontal_face < 30; // only compute face attributes for frontal faces!!!
+        	if (frontal_face)
+        	{
+            		if (fcnEfRunFaceIDFeatureExtraction(&(det_result_1->detection[i]), state) == -1)
+            		{
+                  		fprintf(stderr,"ERROR 112: Face ID features computation failed.\n");
+                  		return 112;
+            		}
+        	}
+    	}
     printf("10\n");
+    //*/
     fcnEfFreeImageUc(input_image_1);
     fcnEfShutdownEyeFace(state);
     fcnEfClearEyeFaceState(state);
     fcnEfFreeEyeFaceState(state);
     return 1;
 }
+void SaveIDFile(EfDetResult* &det,string filename)
+{
+	printf("begin save ID\n");
+	if(det==NULL)
+	{
+		printf("NULL det return\n");
+		return ;
+	}
+	if(det->num_detections)
+	{
+		LOG4CXX_TRACE(logger,"num detections "<<det->num_detections);
+		unsigned int feat_A_length = det->detection[0].feat_id_length;
+    	printf("\nDummy copying of ID feature (length = %d)... ", feat_A_length);
+    	double * feat_A = new double[feat_A_length];
+    	memcpy(feat_A, det->detection[0].feat_id, sizeof(double)*feat_A_length);
 
+    	FILE *fp=fopen(filename.c_str(),"w");
+    	fwrite(feat_A,sizeof(double)*feat_A_length,1,fp);
+    	fclose(fp);
+
+    	delete[] feat_A;
+    	printf("done.\n");
+    }
+    else
+    {
+    	printf("det num_detections == 0\n");
+    }
+}
 int GetFaceID(EfDetResult * &det_result_1,string facedata)
 {
 	void * state = NULL;  
@@ -610,17 +671,21 @@ int GetFaceID(EfDetResult * &det_result_1,string facedata)
 	 if (!(state = fcnEfInitEyeFace(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI)))
 	 {
 	     fprintf(stderr,"ERROR 103: efInitEyeFace() failed.\n");
+	     printf("ERROR 103: efInitEyeFace() failed.\n");
+	     LOG4CXX_TRACE(logger,"ERROR 103: efInitEyeFace() failed.\n");
 	     return 103;
 	 }
 	//printf("01.5\n");
 	if (!(input_image_1 = fcnEfReadImageUc("./temp1.jpg")))
     {
         LOG4CXX_TRACE(logger,"ERROR 105: Can't load the image file");
+        printf("ERROR 105: Can't load the image file");
         return 105;
     }
 	//printf("02\n");
     if (!(det_result_1 = fcnEfRunFaceDetector(input_image_1, state)))
     {
+        LOG4CXX_TRACE(logger,"ERROR 106: efRunFaceDetector() failed.");
         LOG4CXX_TRACE(logger,"ERROR 106: efRunFaceDetector() failed.");
         return 106;
     }
@@ -634,6 +699,7 @@ int GetFaceID(EfDetResult * &det_result_1,string facedata)
 	    LOG4CXX_TRACE(logger,"sdk found 0 face");
     	return 170;//no face
     }
+//*
     for (int i = 0;  i < det_result_1->num_detections; i++)
     {
         EfLandmarkResult * landmark_result = NULL;
@@ -671,6 +737,7 @@ int GetFaceID(EfDetResult * &det_result_1,string facedata)
             }
         }
     }
+   //*/
     fcnEfFreeImageUc(input_image_1);
     fcnEfShutdownEyeFace(state);
     fcnEfClearEyeFaceState(state);
@@ -679,31 +746,51 @@ int GetFaceID(EfDetResult * &det_result_1,string facedata)
 
 }
 
-float CompareFace(EfDetResult* &e1,EfDetResult* &e2)
+float CompareFace(double* &e1,double* &e2)
 {
-	void * state = NULL; 
+	void * state = NULL;    
 	if (!(state = fcnEfInitEyeFace(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI)))
 	{
 	     fprintf(stderr,"ERROR 103: efInitEyeFace() failed.\n");
 	     return 103;
 	}
-	if(e1->num_detections>0&&e2->num_detections>0)
-	{
+	//if(e1->num_detections>0&&e2->num_detections>0)
+	//{
 		double response = 0.0;
-		fcnEfIDCompareFeatureVectors(e1->detection[0].feat_id,e2->detection[0].feat_id,state,&response);
+		fcnEfIDCompareFeatureVectors(e1,e2,state,&response);
 		fcnEfShutdownEyeFace(state);
 		fcnEfClearEyeFaceState(state);
 		fcnEfFreeEyeFaceState(state);
 		return response;								
-	}
-	else
-	{
-		 fcnEfShutdownEyeFace(state);
-		 fcnEfClearEyeFaceState(state);
-		 fcnEfFreeEyeFaceState(state);
-		return 0.0f;
-	}
+	//}
+	//else
+	//{
+	//	 fcnEfShutdownEyeFace(state);
+	//	 fcnEfClearEyeFaceState(state);
+	//	 fcnEfFreeEyeFaceState(state);
+		
+	//	return 0.0f;
+	//}
 }
+long GetFileSize(char *filename)
+{
+
+   long siz = 0;
+
+   FILE *fp = fopen(filename, "rb");
+
+   if (fp) {
+
+     fseek(fp, 0, SEEK_END);
+
+      siz = ftell(fp);
+
+      fclose(fp);
+
+      }
+      return siz;
+}
+
 string FindMatchFace2(string facedata,string pkgdir)
 {
 	string rets="";
@@ -718,29 +805,35 @@ string FindMatchFace2(string facedata,string pkgdir)
 	char sdir[20] = {0};
 	strcpy(sdir,pkgdir.c_str());
 	getdirfiles(sdir,nAfids,v);
-	for(unsigned int i = 0; i < nAfids; i++)
+	unsigned int i=0;
+	for(i = 0; i < nAfids; i++)
 	{
 		char onefile[256] = {0};
 		strcpy(onefile,v.at(i).c_str());
-		EfDetResult *det_result_2;
-		if(1 != GetFileFacID(det_result_2,onefile))
+		int slen = strlen(onefile);
+		if(onefile[slen-1]!='d'||onefile[slen-2]!='i'||onefile[slen-3]!='.')
 		{
-			fcnEfFreeDetResult(det_result_2);
 			continue;
-		}	
-		printf("11\n");
-		float rate = CompareFace(det_result_1,det_result_2);
-		printf("12\n");
+		}
+		int len = GetFileSize(onefile);
+		if(len==0)
+			continue;
+		double * cnt = new double[len/sizeof(double)];
+		FILE *ft = fopen(onefile,"rb");
+		fread(cnt,len,1,ft);
+		fclose(ft);
+		float rate = CompareFace(det_result_1->detection[0].feat_id,cnt);
+		delete [] cnt;
 		if(rate > 3.0f)
 		{
 			rets = v.at(i);
-			fcnEfFreeDetResult(det_result_2);
+			LOG4CXX_TRACE(logger,"found same face "<<v.at(i));
 			break;
 		}
 	}
+	LOG4CXX_TRACE(logger,"total compare "<<i<<" faces");
 	fcnEfFreeDetResult(det_result_1);
 	return rets;
-
 }
 
 int SendFace2DB(int len0,char* facedata,int len1,char* afid,const char* place,const char* pos,int workmode,const char* camname,const char* suuid,const char* stime,const char* sgender,const char* sage,int whichdb=0)
@@ -895,39 +988,23 @@ void UpdateAfid(vector<string>& allfaces,string suuid,int newfacetime,string pkg
 
 int getga2(IplImage img,int& g,int& a)
 {
+	/*
 	ef_shlib_hnd dll_handle2;                                                  // global pointer to EyeFace-SDK shared library
 
 	EF_OPEN_SHLIB(dll_handle2,lib_name);
 
-    // load shared library - explicit linking
-    //EF_OPEN_SHLIB(lib_handle, lib_path);
-
-	// library linking failed? (file not found, license invalid, or linker dependency missing)
-	//if (!lib_handle)
-		//return -1;
 	fcn_efInitEyeFace                       fcnEfInitEyeFace1;
 	fcn_efFreeEyeFaceState                  fcnEfFreeEyeFaceState1;
 	fcn_efMain                              fcnEfMain1;
 	fcn_efGetVisualOutput                   fcnEfGetVisualOutput1;
 	fcn_efFreeVisualOutput                  fcnEfFreeVisualOutput1;
 
-    // get pointers to functions from loaded library
-    //EF_LOAD_SHFCN(fcnEfReadImageUc, fcn_efReadImageUc, lib_handle, "efReadImageUc");
-    //EF_LOAD_SHFCN(fcnEfFreeImageUc, fcn_efFreeImageUc, lib_handle,  "efFreeImageUc");
     EF_LOAD_SHFCN(fcnEfInitEyeFace1, fcn_efInitEyeFace, dll_handle2, "efInitEyeFace");
     EF_LOAD_SHFCN(fcnEfFreeEyeFaceState1, fcn_efFreeEyeFaceState, dll_handle2, "efFreeEyeFaceState");
     EF_LOAD_SHFCN(fcnEfMain1, fcn_efMain, dll_handle2, "efMain");
     EF_LOAD_SHFCN(fcnEfGetVisualOutput1, fcn_efGetVisualOutput, dll_handle2, "efGetVisualOutput");
     EF_LOAD_SHFCN(fcnEfFreeVisualOutput1, fcn_efFreeVisualOutput, dll_handle2, "efFreeVisualOutput");
-    //EF_LOAD_SHFCN(fcnEfGetLibraryVersion, fcn_efGetLibraryVersion, lib_handle, "efGetLibraryVersion");
-
-    // write out library version
-//    printf("EyeFace SDK library version: %d\n\n", fcnEfGetLibraryVersion());
-
-    // load image
-   // EfMatrixUc * input_image = fcnEfReadImageUc("./temp.jpg");
-
-
+//*/
     IplImage *grey_image = cvCreateImage(cvSize(img.width, img.height), 8, 1);
                 
         // convert opencv image to gray image and to raw_img
@@ -942,7 +1019,7 @@ int getga2(IplImage img,int& g,int& a)
 
     // init EyeFace state
     void * state;
-    state = fcnEfInitEyeFace1(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI);
+    state = fcnEfInitEyeFace(EYEFACE_DIR,EYEFACE_DIR,EYEFACE_DIR,CONFIG_INI);
 
 	// EyeFace SDK init failed? (license invalid) 
 	if (!state)
@@ -950,7 +1027,7 @@ int getga2(IplImage img,int& g,int& a)
 		cvReleaseImage(&grey_image);
     	delete [] raw_img;
     	printf("getga2 failed 1\n");
-    	EF_FREE_LIB(dll_handle2);
+    	//EF_FREE_LIB(dll_handle2);
     	LOG4CXX_TRACE(logger,"getga2 failed");
 		return -1;
 	}
@@ -963,13 +1040,13 @@ int getga2(IplImage img,int& g,int& a)
     bounding_box.bot_right_row = grey_image->height - 1;
 
 	// run face detection and recognition
-    fcnEfMain1(raw_img,grey_image->width,grey_image->height, 0, &bounding_box, state, 0);
+    fcnEfMain(raw_img,grey_image->width,grey_image->height, 0, &bounding_box, state, 0);
 
     cvReleaseImage(&grey_image);
     delete [] raw_img;
 
 	// recover tracks from the state
-    EfVisualOutput * visual_output = fcnEfGetVisualOutput1(state, 0, 0);
+    EfVisualOutput * visual_output = fcnEfGetVisualOutput(state, 0, 0);
 
 //    printf("Number of detected faces: %d\n", visual_output->num_vis);
 
@@ -998,10 +1075,12 @@ int getga2(IplImage img,int& g,int& a)
     }
 
     // Tidy-up
-    fcnEfFreeVisualOutput1(visual_output);
-//    fcnEfFreeImageUc(input_image);
-    fcnEfFreeEyeFaceState1(state);
-    EF_FREE_LIB(dll_handle2);
+    fcnEfFreeVisualOutput(visual_output);
+	fcnEfShutdownEyeFace(state);
+	fcnEfClearEyeFaceState(state);
+	fcnEfFreeEyeFaceState(state);
+    //fcnEfFreeEyeFaceState(state);
+   // EF_FREE_LIB(dll_handle2);
 
     return 0;
 }
@@ -1048,6 +1127,8 @@ void getdbgenderage(string suuid)//search db 2 find first rec gender and age
 		return;
 	} 
 	string querys = "SELECT Id,gender,age FROM face WHERE uuid ='"+cs+"'";
+	LOG4CXX_TRACE(logger,querys);
+
 	if(mysql_query(con, querys.c_str()))
 	{
 		finish_with_error(con);
@@ -1088,7 +1169,8 @@ void getdbgenderage(string suuid)//search db 2 find first rec gender and age
 	mysql_close(con);
 }
 #define DEALSAMECOUNT 10
-EfDetResult* L_10_result[DEALSAMECOUNT]={NULL};
+//EfDetResult* L_10_result[DEALSAMECOUNT]={NULL};
+double* L_10_result[DEALSAMECOUNT] = {0};
 int Save_10_index = -1;
 int DetectSameFace(string sfacenow)
 {
@@ -1097,7 +1179,11 @@ int DetectSameFace(string sfacenow)
 	EfDetResult * det_result_1=NULL;
 	if(1!=GetFaceID(det_result_1,sfacenow))
 	{
-
+		if(det_result_1!=NULL)
+		{
+			LOG4CXX_TRACE(logger,"GetFaceID Failed but detresult not NULL");
+			fcnEfFreeDetResult(det_result_1);
+		}
 		return -1;
 	}
 	
@@ -1106,8 +1192,11 @@ int DetectSameFace(string sfacenow)
 	{
 		if(L_10_result[i]!=NULL)
 		{
-			if(CompareFace(det_result_1,L_10_result[i])>=0.0f)
+			float cf = CompareFace(det_result_1->detection[0].feat_id,L_10_result[i]);
+			if(cf>=0.0f)
 				{
+					//printf("====%f=====%f=====\n",det_result_1->detection[0].feat_id_length,L_10_result[i]->detection[0].feat_id_length);
+					//printf("cf = %f \n");
 					ret=1;
 					break;
 				}
@@ -1118,6 +1207,45 @@ int DetectSameFace(string sfacenow)
 		fcnEfFreeDetResult(det_result_1);
 
 	return ret;
+}
+
+int GetFreeMemory()
+{
+        FILE *fd;  
+
+        char buff[256];  
+
+        int total = 0;  
+
+        int free = 0;  
+
+        float use=0;  
+
+  
+
+        fd = fopen ("/proc/meminfo", "r");  
+
+  
+
+        fgets (buff, sizeof(buff), fd);  
+
+        sscanf (buff, "%*s %d %*s", &total);  
+
+  
+
+        fgets (buff, sizeof(buff), fd);  
+
+        sscanf (buff, "%*s %d %*s", &free);  
+
+        //printf("free = %d\n",free);
+        //use=(float)((total-free) /(total * 0.01));//百分比  
+
+  
+
+        fclose(fd);      
+
+       return free/1024; 
+
 }
 int main2(int argc, char** argv) {
 	const char* url = argc>1 ? argv[1] : qpid_server;
@@ -1157,7 +1285,10 @@ int main2(int argc, char** argv) {
 			if(1!=GetFaceID(det_result_1,s))
 			{
 				//break;
+				if(det_result_1!=NULL)
+					fcnEfFreeDetResult(det_result_1);
 				det_result_1 = NULL;
+				break;//not find face doesn't save
 			}
 			//fcnEfFreeDetResult(det_result_1);
 			if(DetectSameFace(s)<0)
@@ -1171,26 +1302,53 @@ int main2(int argc, char** argv) {
 
 				if(L_10_result[Save_10_index]!=NULL)
 				{
-					if(NULL!=L_10_result[Save_10_index])
-					fcnEfFreeDetResult(L_10_result[Save_10_index]);
+					//fcnEfFreeDetResult(L_10_result[Save_10_index]);
+					delete [] (double*)L_10_result[Save_10_index];
 				}
 
-				L_10_result[Save_10_index]=det_result_1;
+				unsigned int feat_A_length = det_result_1->detection[0].feat_id_length;
+    			printf("\nDummy copying of ID feature (length = %d)... ", feat_A_length);
+    			L_10_result[Save_10_index] = new double[feat_A_length];
+    			memcpy(L_10_result[Save_10_index], det_result_1->detection[0].feat_id, sizeof(double)*feat_A_length);
+
+				//L_10_result[Save_10_index]=det_result_1;
+
+				
 
 			}
 			else
 			{
+				if(NULL!=det_result_1)
+					fcnEfFreeDetResult(det_result_1);
+
 				LOG4CXX_TRACE(logger,"Found a similar face or not found a face! Do not save it.");
 				break;
 			}
+			//fcnEfFreeDetResult(det_result_1);
 			//*/
 			void* afid = 0;
 			unsigned int size = 0;
 			LOG4CXX_TRACE(logger,"ok");
-			string sfuuid = "";//FindMatchFace2(s,pkg_dir);
+
+			clock_t starttime, endtime;
+       		double totaltime;
+       		starttime = clock();
+			string sfuuid = FindMatchFace2(s,pkg_dir);
+
+			endtime = clock();
+       		totaltime = (double)( (endtime - starttime)/(double)CLOCKS_PER_SEC );
+
+       		LOG4CXX_TRACE(logger,"@@@@total deal match time "<<totaltime<<"@@@");
 			string sgender = "NG";
 			string sage = "NG";
 			int igender = -1,iage = -1;
+
+
+			SaveIDFile(det_result_1,pkg_dir+string("/")+suuid+string(".id"));
+			LOG4CXX_TRACE(logger,"begin free result");
+			if(NULL!=det_result_1)
+					fcnEfFreeDetResult(det_result_1);
+			LOG4CXX_TRACE(logger,"end free result");
 			//FILE* ffh=fopen("./temp.jpg","wb");
 			//fwrite((char*)s.data(),s.size(),1,ffh);
 			//fflush(ffh);
@@ -1218,6 +1376,8 @@ int main2(int argc, char** argv) {
 				sprintf(astring, "%d", iage); //换成这一句吧^_^
 				sage = astring;
 			}
+
+
 			if(sfuuid=="")//a new face
 			{
 				LOG4CXX_TRACE(logger,"add a new face"<<sgender<<" "<<sage);
@@ -1252,6 +1412,22 @@ int main2(int argc, char** argv) {
 				std::vector<string>().swap(vallfaces);
 
 			}
+			if(GetFreeMemory()<300)
+			{
+				time_t now;
+				struct tm *curTime;
+				char filename[256];
+				now = time(NULL);
+   				curTime = localtime(&now);
+   				sprintf(filename,"%04d-%02d-%02d %02d-%02d-%02d",curTime->tm_year+1900,
+        		curTime->tm_mon+1,curTime->tm_mday,curTime->tm_hour,curTime->tm_min,
+        		curTime->tm_sec);
+   				FILE *fp = fopen(filename,"w");
+   				fprintf(fp,"memory too low ,only %d left",GetFreeMemory());
+   				fclose(fp);
+   				system("/root/recovery.sh");
+   				exit(0);
+			}
 			break;
 		}
 		LOG4CXX_TRACE(logger,"before releaseimg");
@@ -1281,6 +1457,9 @@ int main(int argc, char** argv)
         freeDll();
         return 103;
     }
+   	fcnEfShutdownEyeFace(state);
+	fcnEfClearEyeFaceState(state);
+	fcnEfFreeEyeFaceState(state);
 	ifstream is("./rvdb_config.xml");
 	SeT t = readset(is);
 	is.close();
