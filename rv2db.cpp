@@ -70,6 +70,7 @@ typedef longlong int64;
 const char *ageStrings[] = { "0-10", "5-15", "10-20", "15_25", "20-30", "25_35", "30-40", "35-45", "40-50", "45+" };
 const char *MaleFemale[] = { "male", "female" };
 char sql_server[30] = { 0 };
+char sql_user[30] = { 0 };
 char sql_passwd[30] = { 0 };
 char sql_db[30] = { 0 };
 char qpid_server[256] = { 0 };
