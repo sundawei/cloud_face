@@ -1,4 +1,4 @@
-#include <stdio.h>
+、#include <stdio.h>
 #include <vector>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -70,6 +70,7 @@ typedef longlong int64;
 const char *ageStrings[] = { "0-10", "5-15", "10-20", "15_25", "20-30", "25_35", "30-40", "35-45", "40-50", "45+" };
 const char *MaleFemale[] = { "male", "female" };
 char sql_server[30] = { 0 };
+char sql_user[30] = { 0 };
 char sql_passwd[30] = { 0 };
 char sql_db[30] = { 0 };
 char qpid_server[256] = { 0 };
@@ -793,7 +794,7 @@ long GetFileSize(char *filename)
 	return siz;
 }
 
-string FindMatchFace2(string facedata, string pkgdir)
+string FindMatchFace2(string facedata, string pkgdir, int gender, int age)
 {
 	string rets = "";
 	EfDetResult *det_result_1;
@@ -817,6 +818,19 @@ string FindMatchFace2(string facedata, string pkgdir)
 		{
 			continue;
 		}
+		//033E77F0-F690-E292-DB8A-8CEC00000000_0_36.id
+		int fgender = -1, fage = -1;
+		int ist = strlen(v.at(i).c_str()) - 8;
+		fgender = atoi(v.at(i).substr(ist + 1, 1).c_str());
+		fage = atoi(v.at(i).substr(ist + 3, 2).c_str());
+
+
+		if (fgender != gender)
+			continue;
+		if (abs(fage - age)>5)
+			continue;
+		LOG4CXX_TRACE(logger, "compare a face age0=" << age << " age1=" << fage << " gender0=" << gender << " gender1=" << fgender);
+
 		int len = GetFileSize(onefile);
 		if (len == 0)
 			continue;
@@ -826,7 +840,7 @@ string FindMatchFace2(string facedata, string pkgdir)
 		fclose(ft);
 		float rate = CompareFace(det_result_1->detection[0].feat_id, cnt);
 		delete[] cnt;
-		if (rate > 2.5f)
+		if (rate > 2.7f)
 		{
 			rets = v.at(i);
 			LOG4CXX_TRACE(logger, "found same face " << v.at(i));
@@ -1194,7 +1208,7 @@ int DetectSameFace(string sfacenow)
 		if (L_10_result[i] != NULL)
 		{
 			float cf = CompareFace(det_result_1->detection[0].feat_id, L_10_result[i]);
-			if (cf >= 2.5f)
+			if (cf >= 2.7f)
 			{
 				//printf("====%f=====%f=====\n",det_result_1->detection[0].feat_id_length,L_10_result[i]->detection[0].feat_id_length);
 				//printf("cf = %f \n");
@@ -1248,6 +1262,16 @@ int GetFreeMemory()
 	return free / 1024;
 
 }
+void GetGAFromPic(string spic, int &g, int &a)
+{
+	std::vector<char> data1((char*)spic.data(), (char*)spic.data() + spic.size());
+	cv::Mat imgMat = cv::imdecode(Mat(data1), CV_LOAD_IMAGE_COLOR);
+	IplImage iimg = imgMat;
+	getga2(iimg, g, a);
+	data1.clear();
+	std::vector<char>().swap(data1);
+}
+
 int main2(int argc, char** argv) {
 	const char* url = argc>1 ? argv[1] : qpid_server;
 	const char* address = argc>2 ? argv[2] : qpid_address;
@@ -1331,7 +1355,23 @@ int main2(int argc, char** argv) {
 			clock_t starttime, endtime;
 			double totaltime;
 			starttime = clock();
-			string sfuuid = FindMatchFace2(s, pkg_dir);
+			int igender = -1, iage = -1;
+			//string sgender = "NG";
+			//string sage = "NG";
+			GetGAFromPic(s, igender, iage);
+			if (iage == -1)
+			{
+				if (NULL != det_result_1)
+					fcnEfFreeDetResult(det_result_1);
+				break;
+			}
+
+			if (iage != -1 && igender == -1)
+			{
+				igender = 0;
+			}
+
+			string sfuuid = FindMatchFace2(s, pkg_dir, igender, iage);
 
 			endtime = clock();
 			totaltime = (double)((endtime - starttime) / (double)CLOCKS_PER_SEC);
@@ -1339,13 +1379,17 @@ int main2(int argc, char** argv) {
 			LOG4CXX_TRACE(logger, "@@@@total deal match time " << totaltime << "@@@");
 			string sgender = "NG";
 			string sage = "NG";
-			int igender = -1, iage = -1;
+
 
 
 			if (sfuuid == "")
 			{
 				mkdir(pkg_dir.c_str(), 0775);
-				int len = SaveIDFile(det_result_1, pkg_dir + string("/") + suuid + string(".id"));
+				char ga_param[10] = { 0 };
+				sprintf(ga_param, "_%d_%02d", igender, iage);
+				int len = SaveIDFile(det_result_1, pkg_dir + string("/") + suuid + string(ga_param) + string(".id"));
+
+				LOG4CXX_TRACE(logger, pkg_dir + string("/") + suuid + string(ga_param) + string(".id"));
 				if (len == 0)
 				{
 					if (NULL != det_result_1)
@@ -1353,24 +1397,18 @@ int main2(int argc, char** argv) {
 					break;
 				}
 			}
-			LOG4CXX_TRACE(logger, pkg_dir + string("/") + suuid + string(".id"));
+
 			LOG4CXX_TRACE(logger, "begin free result");
 			if (NULL != det_result_1)
 				fcnEfFreeDetResult(det_result_1);
 			LOG4CXX_TRACE(logger, "end free result");
-			//FILE* ffh=fopen("./temp.jpg","wb");
-			//fwrite((char*)s.data(),s.size(),1,ffh);
-			//fflush(ffh);
-			//fclose(ffh);
-			std::vector<char> data1((char*)s.data(), (char*)s.data() + s.size());
-			cv::Mat imgMat = cv::imdecode(Mat(data1), CV_LOAD_IMAGE_COLOR);
-			IplImage iimg = imgMat;
-			getga2(iimg, igender, iage);
-			data1.clear();
-			std::vector<char>().swap(data1);
 
-			if (igender == -1 && iage == -1)
-				break;
+			//	std::vector<char> data1((char*)s.data(), (char*)s.data() + s.size());
+			//	cv::Mat imgMat = cv::imdecode(Mat(data1), CV_LOAD_IMAGE_COLOR);
+			//	IplImage iimg=imgMat;
+			//	getga2(iimg,igender,iage);
+			//		data1.clear();
+			//	std::vector<char>().swap(data1);
 			if (igender != -1)
 			{
 				sgender = MaleFemale[igender];
