@@ -639,7 +639,7 @@ string FindMatchFace2(double *dr,string pkgdir,int gender,int age)
 		LOG4CXX_TRACE(logger,"begin c");
 		float rate = CompareFace(dr,cnt);
 		delete [] cnt;
-		if(rate > FV/2)
+		if(rate > FV)
 		{
 			rets = v.at(i);
 			LOG4CXX_TRACE(logger,"found same face "<<v.at(i));
